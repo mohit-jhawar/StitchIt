@@ -1,0 +1,25 @@
+---
+import DashboardLayout from '../../../layouts/DashboardLayout.astro';
+import DashboardStats from '../../../components/analytics/DashboardStats';
+import RevenueChart from '../../../components/analytics/RevenueChart';
+import OrderStatusChart from '../../../components/analytics/OrderStatusChart';
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'ADMIN') return Astro.redirect('/dashboard');
+---
+
+<DashboardLayout title="Analytics - StitchIt" pageTitle="Analytics">
+  <div class="space-y-4">
+    <div>
+      <h1 class="text-xl font-bold text-gray-900">Analytics</h1>
+      <p class="text-gray-500 text-sm mt-1">Business performance insights and trends</p>
+    </div>
+
+    <DashboardStats client:load />
+
+    <div class="grid lg:grid-cols-2 gap-4">
+      <RevenueChart client:load />
+      <OrderStatusChart client:load />
+    </div>
+  </div>
+</DashboardLayout>

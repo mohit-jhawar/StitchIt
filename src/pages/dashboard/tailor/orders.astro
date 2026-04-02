@@ -1,0 +1,14 @@
+---
+import DashboardLayout from '../../../layouts/DashboardLayout.astro';
+import OrderList from '../../../components/orders/OrderList';
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'TAILOR') return Astro.redirect('/dashboard');
+---
+
+<DashboardLayout title="My Work - StitchIt" pageTitle="My Work">
+  <div class="space-y-4 pt-2">
+
+    <OrderList role="TAILOR" client:load />
+  </div>
+</DashboardLayout>

@@ -1,0 +1,347 @@
+---
+import DashboardLayout from '../../../layouts/DashboardLayout.astro';
+import db from '../../../lib/db';
+import { formatCurrency, formatDate, getOrderStatusColor } from '../../../lib/utils';
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'ADMIN') return Astro.redirect('/dashboard');
+
+const tab = (Astro.url.searchParams.get('tab') || 'overview') as 'overview' | 'customers' | 'tailors';
+
+// Fetch all orders with payments, customer, and tailor info
+const orders = await db.order.findMany({
+  orderBy: { createdAt: 'desc' },
+  include: {
+    customer: { select: { id: true, name: true, phone: true, userId: true } },
+    tailor:   { select: { id: true, name: true, phone: true, totalEarnings: true } },
+    payments: true,
+    items:    { include: { service: true } },
+  },
+});
+
+// Per-order financials
+const orderData = orders.map((o) => {
+  const totalPaid  = o.payments.reduce((s, p) => s + p.amount, 0);
+  const balanceDue = Math.max(0, o.totalAmount - totalPaid);
+  return { ...o, totalPaid, balanceDue };
+});
+
+// Revenue overview
+const totalBilled      = orders.reduce((s, o) => s + o.totalAmount, 0);
+const totalCollected   = orderData.reduce((s, o) => s + o.totalPaid, 0);
+const totalOutstanding = orderData.reduce((s, o) => s + o.balanceDue, 0);
+
+// Customer dues — group by customer
+const customerDueMap = new Map<string, { name: string; phone: string | null; totalBilled: number; totalPaid: number; totalDue: number; orders: typeof orderData }>();
+for (const o of orderData) {
+  const key = o.customer.id;
+  if (!customerDueMap.has(key)) {
+    customerDueMap.set(key, { name: o.customer.name, phone: o.customer.phone, totalBilled: 0, totalPaid: 0, totalDue: 0, orders: [] });
+  }
+  const c = customerDueMap.get(key)!;
+  c.totalBilled += o.totalAmount;
+  c.totalPaid   += o.totalPaid;
+  c.totalDue    += o.balanceDue;
+  c.orders.push(o);
+}
+const customerDues = [...customerDueMap.values()]
+  .filter((c) => c.totalDue > 0)
+  .sort((a, b) => b.totalDue - a.totalDue);
+
+const allCustomerSummary = [...customerDueMap.values()].sort((a, b) => b.totalBilled - a.totalBilled);
+
+// Tailor earnings summary
+const tailors = await db.tailorProfile.findMany({
+  orderBy: { totalEarnings: 'desc' },
+  include: {
+    user: { select: { email: true } },
+    _count: { select: { orders: true } },
+  },
+});
+const tailorOrderCounts = await Promise.all(
+  tailors.map(async (t) => {
+    const delivered = await db.order.count({ where: { tailorId: t.id, status: 'DELIVERED' } });
+    const active    = await db.order.count({ where: { tailorId: t.id, status: { notIn: ['DELIVERED'] } } });
+    const ordersWithDue = orderData.filter((o) => o.tailorId === t.id && o.balanceDue > 0).length;
+    return { ...t, delivered, active, ordersWithDue };
+  })
+);
+const totalTailorEarnings = tailors.reduce((s, t) => s + t.totalEarnings, 0);
+---
+
+<DashboardLayout title="Financial Monitor - StitchIt" pageTitle="Financial Monitor">
+  <div class="space-y-4">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Financial Monitor</h1>
+      <p class="text-gray-500 text-sm mt-1">Complete financial overview — revenue, customer dues, and tailor earnings.</p>
+    </div>
+
+    <!-- Revenue summary cards -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {[
+        { label: 'Total Billed', value: formatCurrency(totalBilled), icon: '🧾', color: 'bg-indigo-50 text-indigo-600', border: 'border-indigo-200' },
+        { label: 'Total Collected', value: formatCurrency(totalCollected), icon: '💰', color: 'bg-green-50 text-green-600', border: 'border-green-200' },
+        { label: 'Outstanding', value: formatCurrency(totalOutstanding), icon: '⏳', color: 'bg-red-50 text-red-600', border: 'border-red-200' },
+        { label: 'Tailor Payouts', value: formatCurrency(totalTailorEarnings), icon: '✂️', color: 'bg-purple-50 text-purple-600', border: 'border-purple-200' },
+      ].map((s) => (
+        <div class={`bg-white rounded-xl border ${s.border} p-3.5`}>
+          <div class={`w-8 h-8 ${s.color} rounded-lg flex items-center justify-center text-base mb-2`}>{s.icon}</div>
+          <p class="text-[10px] text-gray-500 uppercase tracking-tight">{s.label}</p>
+          <p class="text-xl font-bold text-gray-900 mt-0.5">{s.value}</p>
+        </div>
+      ))}
+    </div>
+
+    <!-- Secondary stats -->
+    <div class="grid grid-cols-4 gap-4">
+      {[
+        { label: 'Total Orders', value: orders.length },
+        { label: 'Customers with Due', value: customerDues.length },
+        { label: 'Cleared Orders', value: orderData.filter((o) => o.balanceDue === 0).length },
+        { label: 'Pending Balance Orders', value: orderData.filter((o) => o.balanceDue > 0).length },
+      ].map((s) => (
+        <div class="bg-white rounded-xl border border-gray-200 p-3 text-center">
+          <p class="text-xl font-bold text-gray-900">{s.value}</p>
+          <p class="text-[10px] text-gray-500 mt-0.5 uppercase tracking-tight">{s.label}</p>
+        </div>
+      ))}
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex gap-1 border-b border-gray-200">
+      {[
+        { key: 'overview', label: 'All Orders' },
+        { key: 'customers', label: `Customer Dues (${customerDues.length})` },
+        { key: 'tailors', label: 'Tailor Earnings' },
+      ].map((t) => (
+        <a
+          href={`?tab=${t.key}`}
+          class={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            tab === t.key
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          {t.label}
+        </a>
+      ))}
+    </div>
+
+    <!-- All Orders tab -->
+    {tab === 'overview' && (
+      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th class="text-left px-4 py-2 font-medium text-gray-500 text-xs">Order</th>
+                <th class="text-left px-4 py-2 font-medium text-gray-500 text-xs">Customer</th>
+                <th class="text-left px-4 py-2 font-medium text-gray-500 text-xs">Tailor</th>
+                <th class="text-left px-4 py-2 font-medium text-gray-500 text-xs">Status</th>
+                <th class="text-right px-4 py-2 font-medium text-gray-500 text-xs">Billed</th>
+                <th class="text-right px-4 py-2 font-medium text-gray-500 text-xs">Collected</th>
+                <th class="text-right px-4 py-2 font-medium text-gray-500 text-xs">Due</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              {orderData.map((o) => (
+                <tr class="hover:bg-gray-50 transition-colors">
+                  <td class="px-4 py-2">
+                    <a href={`/dashboard/admin/orders/${o.id}`} class="font-mono text-indigo-600 hover:underline font-semibold text-[10px]">
+                      {o.orderNumber}
+                    </a>
+                    <p class="text-[10px] text-gray-400 mt-0.5">{formatDate(o.createdAt)}</p>
+                  </td>
+                  <td class="px-4 py-2">
+                    <a href={`/dashboard/admin/users/${o.customer.userId}`} class="font-medium text-gray-900 hover:text-indigo-600 text-xs">
+                      {o.customer.name}
+                    </a>
+                  </td>
+                  <td class="px-4 py-2 text-gray-600 text-xs">{o.tailor?.name || <span class="text-gray-400 italic">Unassigned</span>}</td>
+                  <td class="px-4 py-2">
+                    <span class={`inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getOrderStatusColor(o.status)}`}>
+                      {o.status.replace(/_/g, ' ')}
+                    </span>
+                  </td>
+                  <td class="px-4 py-2 text-right font-medium text-gray-900 text-xs">{formatCurrency(o.totalAmount)}</td>
+                  <td class="px-4 py-2 text-right font-medium text-green-600 text-xs">{formatCurrency(o.totalPaid)}</td>
+                  <td class="px-4 py-2 text-right font-bold text-xs">
+                    {o.balanceDue > 0
+                      ? <span class="text-red-600">{formatCurrency(o.balanceDue)}</span>
+                      : <span class="text-green-500 text-[10px]">Cleared</span>
+                    }
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot class="bg-gray-50 border-t-2 border-gray-200">
+              <tr>
+                <td colspan="4" class="px-5 py-3 font-semibold text-gray-700">Totals ({orders.length} orders)</td>
+                <td class="px-5 py-3 text-right font-bold text-gray-900">{formatCurrency(totalBilled)}</td>
+                <td class="px-5 py-3 text-right font-bold text-green-600">{formatCurrency(totalCollected)}</td>
+                <td class="px-5 py-3 text-right font-bold text-red-600">{formatCurrency(totalOutstanding)}</td>
+              </tr>
+            </tfoot>
+          </table>
+          {orders.length === 0 && <div class="p-8 text-center text-gray-400">No orders yet</div>}
+        </div>
+      </div>
+    )}
+
+    <!-- Customer Dues tab -->
+    {tab === 'customers' && (
+      <div class="space-y-4">
+        {customerDues.length === 0 ? (
+          <div class="bg-green-50 border border-green-200 rounded-xl p-8 text-center">
+            <p class="text-4xl mb-2">🎉</p>
+            <p class="font-semibold text-green-900">All customers are paid up!</p>
+            <p class="text-sm text-green-700 mt-1">No outstanding balances.</p>
+          </div>
+        ) : (
+          <>
+            <div class="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
+              <span class="text-2xl">⚠️</span>
+              <div>
+                <p class="font-semibold text-red-900">{customerDues.length} customers have outstanding balances</p>
+                <p class="text-sm text-red-700">Total due: <strong>{formatCurrency(totalOutstanding)}</strong></p>
+              </div>
+            </div>
+
+            {customerDues.map((c) => (
+              <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div class="px-5 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                  <div>
+                    <p class="font-semibold text-gray-900">{c.name}</p>
+                    {c.phone && <p class="text-xs text-gray-400">📞 {c.phone}</p>}
+                  </div>
+                  <div class="text-right">
+                    <p class="text-xs text-gray-400">Total billed: {formatCurrency(c.totalBilled)}</p>
+                    <p class="text-xs text-green-600">Paid: {formatCurrency(c.totalPaid)}</p>
+                    <p class="text-base font-bold text-red-600">Due: {formatCurrency(c.totalDue)}</p>
+                  </div>
+                </div>
+                <div class="divide-y divide-gray-100">
+                  {c.orders.filter((o) => o.balanceDue > 0).map((o) => (
+                    <div class="px-5 py-3 flex items-center justify-between">
+                      <div>
+                        <a href={`/dashboard/admin/orders/${o.id}`} class="font-mono text-indigo-600 hover:underline text-sm font-semibold">
+                          {o.orderNumber}
+                        </a>
+                        <p class="text-xs text-gray-500 mt-0.5">{o.items.map((i: any) => i.service.name).join(', ')}</p>
+                        <p class="text-xs text-gray-400">Tailor: {o.tailor?.name || 'Unassigned'}</p>
+                      </div>
+                      <div class="text-right">
+                        <span class={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${getOrderStatusColor(o.status)}`}>
+                          {o.status.replace(/_/g, ' ')}
+                        </span>
+                        <p class="text-xs text-gray-400 mt-1">{formatCurrency(o.totalAmount)} total</p>
+                        <p class="text-sm font-bold text-red-600">{formatCurrency(o.balanceDue)} due</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+    )}
+
+    <!-- Tailor Earnings tab -->
+    {tab === 'tailors' && (
+      <div class="space-y-4">
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th class="text-left px-5 py-3 font-medium text-gray-500">Tailor</th>
+                  <th class="text-left px-5 py-3 font-medium text-gray-500">Specialization</th>
+                  <th class="text-right px-5 py-3 font-medium text-gray-500">Total Orders</th>
+                  <th class="text-right px-5 py-3 font-medium text-gray-500">Active</th>
+                  <th class="text-right px-5 py-3 font-medium text-gray-500">Delivered</th>
+                  <th class="text-right px-5 py-3 font-medium text-gray-500">Pending Dues</th>
+                  <th class="text-right px-5 py-3 font-medium text-gray-500">Total Earned</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                {tailorOrderCounts.map((t) => (
+                  <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="px-5 py-4">
+                      <p class="font-medium text-gray-900">{t.name}</p>
+                      <p class="text-xs text-gray-400">{t.user.email}</p>
+                    </td>
+                    <td class="px-5 py-4 text-gray-600">{t.specialization || <span class="text-gray-400">—</span>}</td>
+                    <td class="px-5 py-4 text-right text-gray-900 font-medium">{t._count.orders}</td>
+                    <td class="px-5 py-4 text-right">
+                      <span class="inline-flex px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                        {t.active}
+                      </span>
+                    </td>
+                    <td class="px-5 py-4 text-right">
+                      <span class="inline-flex px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                        {t.delivered}
+                      </span>
+                    </td>
+                    <td class="px-5 py-4 text-right">
+                      {t.ordersWithDue > 0
+                        ? <span class="inline-flex px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-medium">{t.ordersWithDue} orders</span>
+                        : <span class="text-xs text-gray-400">—</span>
+                      }
+                    </td>
+                    <td class="px-5 py-4 text-right font-bold text-green-600">{formatCurrency(t.totalEarnings)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot class="bg-gray-50 border-t-2 border-gray-200">
+                <tr>
+                  <td colspan="6" class="px-5 py-3 font-semibold text-gray-700">Total Tailor Payouts</td>
+                  <td class="px-5 py-3 text-right font-bold text-green-600">{formatCurrency(totalTailorEarnings)}</td>
+                </tr>
+              </tfoot>
+            </table>
+            {tailors.length === 0 && <div class="p-8 text-center text-gray-400">No tailors yet</div>}
+          </div>
+        </div>
+
+        <!-- Per-tailor order breakdown -->
+        {tailorOrderCounts.map((t) => {
+          const tailorOrders = orderData.filter((o) => o.tailorId === t.id);
+          if (tailorOrders.length === 0) return null;
+          return (
+            <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div class="px-5 py-4 bg-purple-50 border-b border-purple-100 flex items-center justify-between">
+                <div>
+                  <p class="font-semibold text-purple-900">{t.name}</p>
+                  {t.specialization && <p class="text-xs text-purple-700">✂️ {t.specialization}</p>}
+                </div>
+                <p class="font-bold text-purple-700">{formatCurrency(t.totalEarnings)} earned</p>
+              </div>
+              <div class="divide-y divide-gray-100">
+                {tailorOrders.map((o) => (
+                  <div class="px-5 py-3 flex items-center justify-between">
+                    <div>
+                      <a href={`/dashboard/admin/orders/${o.id}`} class="font-mono text-indigo-600 hover:underline text-sm font-semibold">
+                        {o.orderNumber}
+                      </a>
+                      <p class="text-xs text-gray-500">{o.customer.name} · {formatDate(o.createdAt)}</p>
+                    </div>
+                    <div class="text-right">
+                      <span class={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${getOrderStatusColor(o.status)}`}>
+                        {o.status.replace(/_/g, ' ')}
+                      </span>
+                      <p class="text-xs text-gray-400 mt-1">{formatCurrency(o.totalAmount)} billed</p>
+                      <p class={`text-sm font-bold ${o.balanceDue > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {o.balanceDue > 0 ? `${formatCurrency(o.balanceDue)} due` : 'Cleared'}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    )}
+  </div>
+</DashboardLayout>

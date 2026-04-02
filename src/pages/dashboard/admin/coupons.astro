@@ -1,0 +1,183 @@
+---
+import DashboardLayout from '../../../layouts/DashboardLayout.astro';
+import db from '../../../lib/db';
+import { formatCurrency, formatDate } from '../../../lib/utils';
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'ADMIN') return Astro.redirect('/dashboard');
+
+const coupons = await db.coupon.findMany({ orderBy: { createdAt: 'desc' } });
+---
+
+<DashboardLayout title="Coupons - StitchIt" pageTitle="Coupon Management">
+  <div class="space-y-4">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-xl font-bold text-gray-900">Coupons</h1>
+        <p class="text-gray-500 text-xs mt-0.5">{coupons.length} coupons configured</p>
+      </div>
+      <button
+        id="addCouponBtn"
+        class="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 transition-colors"
+      >
+        + Add Coupon
+      </button>
+    </div>
+
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead class="bg-gray-50/50 border-b border-gray-100">
+            <tr>
+              <th class="px-4 py-2.5 font-bold text-gray-900 text-[10px] uppercase tracking-wider">Code</th>
+              <th class="px-4 py-2.5 font-bold text-gray-900 text-[10px] uppercase tracking-wider">Discount</th>
+              <th class="px-4 py-2.5 font-bold text-gray-900 text-[10px] uppercase tracking-wider">Min Order</th>
+              <th class="px-4 py-2.5 font-bold text-gray-900 text-[10px] uppercase tracking-wider">Usage</th>
+              <th class="px-4 py-2.5 font-bold text-gray-900 text-[10px] uppercase tracking-wider">Expires</th>
+              <th class="px-4 py-2.5 font-bold text-gray-900 text-[10px] uppercase tracking-wider">Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-50">
+            {coupons.map((c) => (
+              <tr class="hover:bg-indigo-50/30 transition-colors">
+                <td class="px-4 py-2.5">
+                  <span class="font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded text-xs">
+                    {c.code}
+                  </span>
+                </td>
+                <td class="px-4 py-2.5 font-medium text-xs text-gray-900">
+                  {c.discountType === 'PERCENTAGE'
+                    ? `${c.value}% off`
+                    : `${formatCurrency(c.value)} off`}
+                </td>
+                <td class="px-4 py-2.5 text-xs text-gray-600">
+                  {c.minOrderAmount ? formatCurrency(c.minOrderAmount) : '-'}
+                </td>
+                <td class="px-4 py-2.5 text-xs text-gray-600">
+                  {c.usedCount} <span class="text-[10px] text-gray-400">/ {c.maxUsage}</span>
+                </td>
+                <td class="px-4 py-2.5 text-xs text-gray-500">
+                  {c.expiresAt ? formatDate(c.expiresAt) : 'Never'}
+                </td>
+                <td class="px-4 py-2.5">
+                  <span class={`inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
+                    ${c.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    {c.isActive ? 'Active' : 'Inactive'}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {coupons.length === 0 && (
+        <div class="text-center py-8 text-gray-400">
+          <p class="font-medium text-sm">No coupons yet</p>
+          <p class="text-xs mt-1">Create your first coupon to offer discounts</p>
+        </div>
+      )}
+    </div>
+  </div>
+
+  <!-- Add Coupon Modal (vanilla JS for simplicity since it's a simple form) -->
+  <div id="couponModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" id="couponModalBackdrop"></div>
+    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+      <h2 class="text-lg font-bold text-gray-900 mb-4">Add New Coupon</h2>
+      <form id="couponForm" class="space-y-4">
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium text-gray-700">Coupon Code</label>
+          <input name="code" type="text" placeholder="e.g. SAVE20" required
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm uppercase focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="flex flex-col gap-1">
+            <label class="text-sm font-medium text-gray-700">Discount Type</label>
+            <select name="discountType" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="PERCENTAGE">Percentage (%)</option>
+              <option value="FLAT">Flat Amount (₹)</option>
+            </select>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-sm font-medium text-gray-700">Value</label>
+            <input name="value" type="number" min="1" placeholder="20" required
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="flex flex-col gap-1">
+            <label class="text-sm font-medium text-gray-700">Min Order (₹)</label>
+            <input name="minOrderAmount" type="number" min="0" placeholder="Optional"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-sm font-medium text-gray-700">Max Usage</label>
+            <input name="maxUsage" type="number" min="1" value="100"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium text-gray-700">Expires At (optional)</label>
+          <input name="expiresAt" type="date"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+        <div id="couponFormError" class="hidden text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg"></div>
+        <div class="flex gap-3 pt-2">
+          <button type="button" id="cancelCoupon"
+            class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">
+            Cancel
+          </button>
+          <button type="submit"
+            class="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">
+            Create Coupon
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</DashboardLayout>
+
+<script>
+  const modal = document.getElementById('couponModal')!;
+  const openBtn = document.getElementById('addCouponBtn')!;
+  const cancelBtn = document.getElementById('cancelCoupon')!;
+  const backdrop = document.getElementById('couponModalBackdrop')!;
+  const form = document.getElementById('couponForm') as HTMLFormElement;
+  const errorEl = document.getElementById('couponFormError')!;
+
+  function openModal() { modal.classList.remove('hidden'); }
+  function closeModal() { modal.classList.add('hidden'); form.reset(); errorEl.classList.add('hidden'); }
+
+  openBtn.addEventListener('click', openModal);
+  cancelBtn.addEventListener('click', closeModal);
+  backdrop.addEventListener('click', closeModal);
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const payload: any = {
+      code: (fd.get('code') as string).toUpperCase(),
+      discountType: fd.get('discountType'),
+      value: parseFloat(fd.get('value') as string),
+      maxUsage: parseInt(fd.get('maxUsage') as string) || 100,
+    };
+    const minAmt = fd.get('minOrderAmount');
+    if (minAmt) payload.minOrderAmount = parseFloat(minAmt as string);
+    const exp = fd.get('expiresAt');
+    if (exp) payload.expiresAt = exp;
+
+    const res = await fetch('/api/coupons', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errorEl.textContent = data.error || 'Failed to create coupon';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    closeModal();
+    window.location.reload();
+  });
+</script>

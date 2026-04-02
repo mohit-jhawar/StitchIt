@@ -1,0 +1,21 @@
+---
+import DashboardLayout from '../../../layouts/DashboardLayout.astro';
+import OrderList from '../../../components/orders/OrderList';
+import { Modal } from '../../../components/ui/Modal';
+import OrderForm from '../../../components/orders/OrderForm';
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'ADMIN') return Astro.redirect('/dashboard');
+---
+
+<DashboardLayout title="Orders - StitchIt" pageTitle="Orders Management">
+  <div class="space-y-4">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">All Orders</h1>
+        <p class="text-gray-500 text-sm mt-1">Manage and track all customer orders</p>
+      </div>
+    </div>
+    <OrderList role="ADMIN" client:load />
+  </div>
+</DashboardLayout>

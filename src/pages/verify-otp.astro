@@ -1,0 +1,24 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { OtpForm } from '../components/auth/OtpForm';
+
+// Capture the email from URL query param
+const email = Astro.url.searchParams.get('email') || '';
+
+if (!email) {
+  return Astro.redirect('/register');
+}
+---
+
+<Layout title="Verify Your Email - StitchShop">
+  <div class="min-h-screen bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl p-8 sm:p-12 relative overflow-hidden">
+      <!-- Decorative background pattern -->
+      <div class="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-50"></div>
+      
+      <div class="relative z-10">
+        <OtpForm client:load email={email} />
+      </div>
+    </div>
+  </div>
+</Layout>

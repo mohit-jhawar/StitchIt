@@ -1,0 +1,176 @@
+---
+import DashboardLayout from '../../../layouts/DashboardLayout.astro';
+import db from '../../../lib/db';
+import { formatCurrency, formatDate } from '../../../lib/utils';
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'ADMIN') return Astro.redirect('/dashboard');
+
+const expenses = await db.expense.findMany({ orderBy: { date: 'desc' }, take: 50 });
+const totalAgg = await db.expense.aggregate({ _sum: { amount: true } });
+const totalAmount = totalAgg._sum.amount || 0;
+
+// Group by category for summary
+const byCat = expenses.reduce((acc: Record<string, number>, e) => {
+  acc[e.category] = (acc[e.category] || 0) + e.amount;
+  return acc;
+}, {});
+
+const CATEGORIES = ['rent', 'salary', 'marketing', 'materials', 'utilities', 'other'];
+const catColors: Record<string, string> = {
+  rent: 'bg-blue-100 text-blue-700',
+  salary: 'bg-purple-100 text-purple-700',
+  marketing: 'bg-pink-100 text-pink-700',
+  materials: 'bg-amber-100 text-amber-700',
+  utilities: 'bg-teal-100 text-teal-700',
+  other: 'bg-gray-100 text-gray-700',
+};
+---
+
+<DashboardLayout title="Expenses - StitchIt" pageTitle="Expense Tracking">
+  <div class="space-y-4">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">Expenses</h1>
+        <p class="text-gray-500 text-sm mt-1">Total: <strong class="text-gray-900">{formatCurrency(totalAmount)}</strong></p>
+      </div>
+      <button
+        id="addExpenseBtn"
+        class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+      >
+        + Add Expense
+      </button>
+    </div>
+
+    <!-- Category Summary -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      {Object.entries(byCat).map(([cat, amt]) => (
+        <div class="bg-white rounded-xl border border-gray-200 p-3 text-center">
+          <span class={`inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-medium capitalize mb-1 ${catColors[cat] || 'bg-gray-100 text-gray-700'}`}>
+            {cat}
+          </span>
+          <p class="text-base font-bold text-gray-900">{formatCurrency(amt)}</p>
+        </div>
+      ))}
+    </div>
+
+    <!-- Expenses Table -->
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th class="text-left px-4 py-2 font-medium text-gray-500 text-xs">Category</th>
+            <th class="text-left px-4 py-2 font-medium text-gray-500 text-xs">Description</th>
+            <th class="text-left px-4 py-2 font-medium text-gray-500 text-xs">Amount</th>
+            <th class="text-left px-4 py-2 font-medium text-gray-500 text-xs text-right">Date</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {expenses.map((e) => (
+            <tr class="hover:bg-gray-50 transition-colors">
+              <td class="px-4 py-2">
+                <span class={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium capitalize ${catColors[e.category] || 'bg-gray-100 text-gray-700'}`}>
+                  {e.category}
+                </span>
+              </td>
+              <td class="px-4 py-2 text-gray-600 text-xs">{e.description || '-'}</td>
+              <td class="px-4 py-2 font-semibold text-gray-900 text-xs">{formatCurrency(e.amount)}</td>
+              <td class="px-4 py-2 text-gray-500 text-xs text-right">{formatDate(e.date)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {expenses.length === 0 && (
+        <div class="text-center py-10 text-gray-400">No expenses recorded yet</div>
+      )}
+    </div>
+  </div>
+
+  <!-- Add Expense Modal -->
+  <div id="expenseModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" id="expenseModalBackdrop"></div>
+    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+        <h2 class="text-base font-bold text-gray-900">Add Expense</h2>
+        <button id="closeExpenseModal" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+      </div>
+      <form id="expenseForm" class="px-4 py-4 space-y-3">
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium text-gray-700">Category</label>
+          <select name="category" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            {CATEGORIES.map((c) => <option value={c} class="capitalize">{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+          </select>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium text-gray-700">Amount (₹)</label>
+          <input name="amount" type="number" min="1" step="0.01" required placeholder="0.00"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium text-gray-700">Description</label>
+          <input name="description" type="text" placeholder="Optional description"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium text-gray-700">Date</label>
+          <input name="date" type="date" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+        <div id="expenseFormError" class="hidden text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg"></div>
+        <div class="flex gap-3 pt-2">
+          <button type="button" id="cancelExpense"
+            class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">
+            Cancel
+          </button>
+          <button type="submit"
+            class="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">
+            Add Expense
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</DashboardLayout>
+
+<script>
+  const modal = document.getElementById('expenseModal')!;
+  const openBtn = document.getElementById('addExpenseBtn')!;
+  const cancelBtn = document.getElementById('cancelExpense')!;
+  const backdrop = document.getElementById('expenseModalBackdrop')!;
+  const form = document.getElementById('expenseForm') as HTMLFormElement;
+  const errorEl = document.getElementById('expenseFormError')!;
+
+  // Set today as default date
+  const dateInput = form.querySelector('[name="date"]') as HTMLInputElement;
+  dateInput.value = new Date().toISOString().split('T')[0];
+
+  function openModal() { modal.classList.remove('hidden'); }
+  function closeModal() { modal.classList.add('hidden'); form.reset(); errorEl.classList.add('hidden'); }
+
+  openBtn.addEventListener('click', openModal);
+  cancelBtn.addEventListener('click', closeModal);
+  backdrop.addEventListener('click', closeModal);
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const payload = {
+      category: fd.get('category') as string,
+      amount: parseFloat(fd.get('amount') as string),
+      description: (fd.get('description') as string) || undefined,
+      date: (fd.get('date') as string) || undefined,
+    };
+    const res = await fetch('/api/expenses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errorEl.textContent = data.error || 'Failed to add expense';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    closeModal();
+    window.location.reload();
+  });
+</script>

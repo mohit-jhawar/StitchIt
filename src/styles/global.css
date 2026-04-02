@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+/* ── Compact Dashboard Overrides ────────────────────────────────────── */
+
+/* Tighter main content area */
+main .space-y-6 { gap: 1rem; }
+main .space-y-6 > * + * { margin-top: 1rem; }
+
+/* Compact page headings */
+main h1.text-2xl { font-size: 1.15rem; line-height: 1.5rem; }
+main h2.text-base, main h2.text-lg { font-size: 0.875rem; line-height: 1.25rem; }
+main p.text-sm.text-gray-500.mt-1 { font-size: 0.75rem; margin-top: 0.125rem; }
+
+/* Compact stat cards */
+main .rounded-xl.border.p-5 { padding: 0.875rem; }
+main .rounded-xl.border.p-6 { padding: 1rem; }
+main .text-3xl.font-bold { font-size: 1.5rem; }
+main .text-2xl.font-bold.text-gray-900.mt-1 { font-size: 1.25rem; margin-top: 0.25rem; }
+
+/* Compact table rows */
+main table thead th { padding-top: 0.5rem; padding-bottom: 0.5rem; font-size: 0.7rem; }
+main table tbody td { padding-top: 0.5rem; padding-bottom: 0.5rem; font-size: 0.8rem; }
+main table tfoot td { padding-top: 0.5rem; padding-bottom: 0.5rem; font-size: 0.8rem; }
+
+/* Empty state compact */
+main .p-12.text-center { padding: 2rem 1.5rem; }
+main .p-10.text-center { padding: 2rem 1.5rem; }
+main .p-8.text-center  { padding: 1.5rem; }
+
+/* Card headers */
+main .border-b .p-5, main .border-b.px-5.py-4 { font-size: 0.85rem; }
+
+/* ── Mobile & UX Enhancements ────────────────────────────────────────── */
+
+/* ── Global Dashboard Styles ────────────────────────────────────────── */
+
+.dashboard-card {
+  @apply bg-white rounded-2xl border border-slate-200/60 shadow-sm transition-all duration-200 hover:shadow-md;
+}
+
+.stat-panel {
+  @apply bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm hover:border-slate-300 transition-all;
+}
+
+.glass {
+  @apply bg-white/80 backdrop-blur-md border-b border-slate-200/50 shadow-sm;
+}
+
+/* Hide scrollbar but keep functionality */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Smooth Sidebar Transitions */
+.sidebar-transition {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Improved touch targets for small screens */
+@media (max-width: 640px) {
+  button, a {
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+  }
+}

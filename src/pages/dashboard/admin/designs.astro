@@ -1,0 +1,15 @@
+---
+import DashboardLayout from '../../../layouts/DashboardLayout.astro';
+import AdminDesignsManager from '../../../components/designs/AdminDesignsManager';
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'ADMIN') return Astro.redirect('/dashboard');
+---
+
+<DashboardLayout
+  title="Design Catalog - StitchIt"
+  pageTitle="Design Catalog"
+  breadcrumbItems={[{ label: 'Admin', href: '/dashboard/admin' }, { label: 'Design Catalog' }]}
+>
+  <AdminDesignsManager client:load />
+</DashboardLayout>

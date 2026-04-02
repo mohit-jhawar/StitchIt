@@ -8,17 +8,27 @@ dist/
 node_modules/
 
 # logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# environment variables
+# databases
+*.db
+*.sqlite
+
+# environmental/tmp
 .env
 .env.production
+tmp/
 
-# macOS-specific files
-.DS_Store
-
-# jetbrains setting folder
+# ide/editor
 .idea/
+.claude/
+.vscode/
+
+# prisma
+/src/generated/prisma
+# prisma migrations are usually kept, but if you want to ignore them:
+# prisma/migrations/

@@ -1,0 +1,23 @@
+---
+import DashboardLayout from '../../../layouts/DashboardLayout.astro';
+import DesignCatalog from '../../../components/designs/DesignCatalog';
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'CUSTOMER') return Astro.redirect('/dashboard');
+---
+
+<DashboardLayout
+  title="Design Catalog - StitchIt"
+  pageTitle="Design Catalog"
+  breadcrumbItems={[{ label: 'Customer', href: '/dashboard/customer' }, { label: 'Design Catalog' }]}
+>
+  <div class="space-y-5">
+    <div>
+      <h1 class="text-xl font-bold text-gray-900">Design Catalog</h1>
+      <p class="text-gray-500 text-sm mt-1">
+        Browse our collection and select a design when placing your next order.
+      </p>
+    </div>
+    <DesignCatalog client:load />
+  </div>
+</DashboardLayout>

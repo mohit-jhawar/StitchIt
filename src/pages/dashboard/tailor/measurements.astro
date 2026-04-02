@@ -1,0 +1,13 @@
+---
+import DashboardLayout from '../../../layouts/DashboardLayout.astro';
+import { MeasurementList } from '../../../components/measurements/MeasurementList';
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'TAILOR') return Astro.redirect('/dashboard');
+---
+
+<DashboardLayout title="Customer Measurements - StitchIt" pageTitle="Measurements">
+  <div class="space-y-4 pt-2">
+    <MeasurementList role="TAILOR" client:load />
+  </div>
+</DashboardLayout>

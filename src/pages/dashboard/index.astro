@@ -1,0 +1,15 @@
+---
+const user = Astro.locals.user;
+
+if (!user) {
+  return Astro.redirect('/login');
+}
+
+const roleRoutes: Record<string, string> = {
+  ADMIN: '/dashboard/admin',
+  CUSTOMER: '/dashboard/customer',
+  TAILOR: '/dashboard/tailor',
+};
+
+return Astro.redirect(roleRoutes[user.role] || '/login');
+---

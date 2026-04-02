@@ -1,0 +1,374 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  CUSTOMER
+  TAILOR
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  FABRIC_SELECTED
+  CUTTING
+  STITCHING
+  FITTING
+  ALTERATIONS
+  QUALITY_CHECK
+  READY
+  DELIVERED
+}
+
+enum Priority {
+  NORMAL
+  URGENT
+  EXPRESS
+}
+
+enum AppointmentType {
+  MEASUREMENT
+  TRIAL
+  CONSULTATION
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  UPI
+  ONLINE
+}
+
+enum PaymentType {
+  ADVANCE
+  BALANCE
+}
+
+enum ComplaintPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ComplaintStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FLAT
+}
+
+model User {
+  id           String          @id @default(cuid())
+  email        String          @unique
+  passwordHash String
+  role         Role            @default(CUSTOMER)
+  emailVerified Boolean         @default(false)
+  verificationToken String?
+  verificationExpires DateTime?
+  resetToken        String?
+  resetTokenExpires DateTime?
+  passwordChangedAt DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  customerProfile  CustomerProfile?
+  tailorProfile    TailorProfile?
+  adminProfile     AdminProfile?
+  notifications    Notification[]
+}
+
+model CustomerProfile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  phone        String?
+  address      String?
+  loyaltyPoints Int     @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  measurements Measurement[]
+  orders       Order[]
+  appointments Appointment[]
+  reviews      Review[]
+  complaints   Complaint[]
+}
+
+model TailorProfile {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  phone          String?
+  specialization String?
+  experience     Int      @default(0)
+  dailyCapacity  Int      @default(5)
+  totalEarnings  Float    @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  orders         Order[]
+  appointments   Appointment[]
+}
+
+model AdminProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Measurement {
+  id              String          @id @default(cuid())
+  customerId      String
+  customer        CustomerProfile @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  name            String
+  chest           Float?
+  waist           Float?
+  hip             Float?
+  shoulder        Float?
+  sleeve          Float?
+  length          Float?
+  inseam          Float?
+  neck            Float?
+  notes           String?
+  imageUrl        String?
+  savedById       String?         // User ID of whoever saved this measurement
+  savedByName     String?         // Display name (tailor name or 'You')
+  savedByRole     String?         // 'CUSTOMER', 'TAILOR', or 'ADMIN'
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  orders          Order[]
+}
+
+model Order {
+  id              String          @id @default(cuid())
+  orderNumber     String          @unique
+  customerId      String
+  customer        CustomerProfile @relation(fields: [customerId], references: [id])
+  tailorId        String?
+  tailor          TailorProfile?  @relation(fields: [tailorId], references: [id])
+  measurementId   String?
+  measurement     Measurement?    @relation(fields: [measurementId], references: [id])
+  status          OrderStatus     @default(PENDING)
+  priority        Priority        @default(NORMAL)
+  totalAmount     Float           @default(0)
+  notes           String?
+  referenceImages String?         // JSON array of image URLs
+  designId        String?
+  design          Design?         @relation(fields: [designId], references: [id])
+  deliveryDate    DateTime?
+  savedById       String?         // User ID of whoever created this order
+  savedByName     String?         // Display name of creator
+  savedByRole     String?         // Role of creator
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  items           OrderItem[]
+  payments        Payment[]
+  reviews         Review[]
+  timeline        OrderTimeline[]
+  complaints      Complaint[]
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  serviceId String
+  service   Service  @relation(fields: [serviceId], references: [id])
+  fabricId  String?
+  fabric    Fabric?  @relation(fields: [fabricId], references: [id])
+  quantity  Int      @default(1)
+  unitPrice Float
+  notes     String?
+  createdAt DateTime @default(now())
+}
+
+model OrderTimeline {
+  id        String      @id @default(cuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    OrderStatus
+  note      String?
+  updatedBy String
+  createdAt DateTime    @default(now())
+}
+
+model Service {
+  id              String      @id @default(cuid())
+  name            String
+  category        String
+  basePrice       Float
+  estimatedDays   Int         @default(7)
+  complexity      String      @default("MEDIUM")
+  description     String?
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  orderItems      OrderItem[]
+  designs         Design[]
+}
+
+model Design {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  category    String
+  serviceId   String
+  service     Service  @relation(fields: [serviceId], references: [id])
+  images      String   // JSON array of image URLs
+  tags        String?
+  basePrice   Float?   // overrides service basePrice when set
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders      Order[]
+}
+
+model Fabric {
+  id            String      @id @default(cuid())
+  name          String
+  type          String
+  pricePerMeter Float
+  stockQuantity Float       @default(0)
+  lowStockAlert Float       @default(5)
+  color         String?
+  description   String?
+  imageUrl      String?
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  orderItems    OrderItem[]
+}
+
+model Appointment {
+  id           String            @id @default(cuid())
+  customerId   String
+  customer     CustomerProfile   @relation(fields: [customerId], references: [id])
+  tailorId     String?
+  tailor       TailorProfile?    @relation(fields: [tailorId], references: [id])
+  type         AppointmentType
+  status       AppointmentStatus @default(SCHEDULED)
+  scheduledAt  DateTime
+  notes        String?
+  bookedById   String?         // User ID of whoever booked this appointment
+  bookedByName String?         // Display name of booker
+  bookedByRole String?         // Role of booker (CUSTOMER, TAILOR, ADMIN)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  orderId       String
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount        Float
+  method        PaymentMethod @default(CASH)
+  type          PaymentType   @default(ADVANCE)
+  notes         String?
+  paidAt        DateTime      @default(now())
+  createdAt     DateTime      @default(now())
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  category    String   // rent, salary, marketing, materials
+  amount      Float
+  description String?
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+}
+
+model Review {
+  id         String          @id @default(cuid())
+  orderId    String
+  order      Order           @relation(fields: [orderId], references: [id])
+  customerId String
+  customer   CustomerProfile @relation(fields: [customerId], references: [id])
+  rating     Int
+  comment    String?
+  createdAt  DateTime        @default(now())
+}
+
+model Complaint {
+  id         String            @id @default(cuid())
+  orderId    String?
+  order      Order?            @relation(fields: [orderId], references: [id])
+  customerId String
+  customer   CustomerProfile   @relation(fields: [customerId], references: [id])
+  subject    String
+  description String
+  priority   ComplaintPriority @default(MEDIUM)
+  status     ComplaintStatus   @default(OPEN)
+  resolution String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+}
+
+model Coupon {
+  id           String       @id @default(cuid())
+  code         String       @unique
+  discountType DiscountType @default(PERCENTAGE)
+  value        Float
+  minOrderAmount Float?
+  maxUsage     Int          @default(100)
+  usedCount    Int          @default(0)
+  expiresAt    DateTime?
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String   @default("info")
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String   // e.g., "LOGIN", "ORDER_CREATE", "PAYMENT_RECEIVE"
+  entityType String?  // e.g., "ORDER", "USER", "PAYMENT"
+  entityId   String?
+  userId     String?
+  details    String?  // JSON string for additional info
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+}
+

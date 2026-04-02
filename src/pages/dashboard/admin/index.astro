@@ -1,0 +1,81 @@
+---
+import DashboardLayout from '../../../layouts/DashboardLayout.astro';
+import DashboardStats from '../../../components/analytics/DashboardStats';
+import RevenueChart from '../../../components/analytics/RevenueChart';
+import OrderStatusChart from '../../../components/analytics/OrderStatusChart';
+import db from '../../../lib/db';
+import { formatCurrency, formatDate } from '../../../lib/utils';
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'ADMIN') return Astro.redirect('/dashboard');
+
+// Recent orders
+const recentOrders = await db.order.findMany({
+  take: 5,
+  orderBy: { createdAt: 'desc' },
+  include: {
+    customer: { select: { name: true } },
+    tailor: { select: { name: true } },
+  },
+});
+---
+
+<DashboardLayout title="Admin Dashboard - StitchIt" pageTitle="Dashboard">
+  <div class="space-y-4">
+    <!-- Stats -->
+    <DashboardStats client:load />
+
+    <!-- Charts row -->
+    <div class="grid lg:grid-cols-3 gap-4">
+      <div class="lg:col-span-2">
+        <RevenueChart client:load />
+      </div>
+      <div>
+        <OrderStatusChart client:load />
+      </div>
+    </div>
+
+    <!-- Recent Orders -->
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+        <h2 class="text-sm font-semibold text-gray-900">Recent Orders</h2>
+        <a href="/dashboard/admin/orders" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">View all →</a>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="text-left px-4 py-2 font-medium text-gray-500">Order</th>
+              <th class="text-left px-4 py-2 font-medium text-gray-500">Customer</th>
+              <th class="text-left px-4 py-2 font-medium text-gray-500">Tailor</th>
+              <th class="text-left px-4 py-2 font-medium text-gray-500">Status</th>
+              <th class="text-left px-4 py-2 font-medium text-gray-500">Amount</th>
+              <th class="text-left px-4 py-2 font-medium text-gray-500">Date</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            {recentOrders.map((order) => (
+              <tr class="hover:bg-gray-50">
+                <td class="px-4 py-2.5 font-mono font-medium text-indigo-600">
+                  <a href={`/dashboard/admin/orders/${order.id}`}>{order.orderNumber}</a>
+                </td>
+                <td class="px-4 py-2.5 text-gray-700">{order.customer?.name || '-'}</td>
+                <td class="px-4 py-2.5 text-gray-700">{order.tailor?.name || 'Unassigned'}</td>
+                <td class="px-4 py-2.5">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
+                    {order.status}
+                  </span>
+                </td>
+                <td class="px-4 py-2.5 font-medium">{formatCurrency(order.totalAmount)}</td>
+                <td class="px-4 py-2.5 text-gray-500">{formatDate(order.createdAt)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {recentOrders.length === 0 && (
+          <div class="text-center py-8 text-gray-400">No orders yet</div>
+        )}
+      </div>
+    </div>
+  </div>
+</DashboardLayout>

@@ -1,0 +1,19 @@
+---
+import DashboardLayout from '../../../layouts/DashboardLayout.astro';
+import MeasurementList from '../../../components/measurements/MeasurementList';
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'CUSTOMER') return Astro.redirect('/dashboard');
+---
+
+<DashboardLayout title="My Measurements - StitchIt" pageTitle="Measurements">
+  <div class="space-y-4">
+    <div>
+      <h1 class="text-xl font-bold text-gray-900">My Measurements</h1>
+      <p class="text-gray-500 text-xs mt-1">
+        Store your body measurements for a perfect fit every time.
+      </p>
+    </div>
+    <MeasurementList client:load />
+  </div>
+</DashboardLayout>

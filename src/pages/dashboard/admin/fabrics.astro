@@ -1,0 +1,246 @@
+---
+import DashboardLayout from '../../../layouts/DashboardLayout.astro';
+import db from '../../../lib/db';
+import { formatCurrency } from '../../../lib/utils';
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'ADMIN') return Astro.redirect('/dashboard');
+
+const fabrics = await db.fabric.findMany({ orderBy: { name: 'asc' } });
+---
+
+<DashboardLayout title="Fabrics - StitchIt" pageTitle="Fabric Inventory">
+  <div class="space-y-4">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-xl font-bold text-gray-900">Fabrics</h1>
+        <p class="text-gray-500 text-xs mt-0.5">{fabrics.length} fabrics in inventory</p>
+      </div>
+      <button
+        id="openAddFabric"
+        class="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-500/20"
+      >
+        + Add Fabric
+      </button>
+    </div>
+
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead class="bg-gray-50/50 border-b border-gray-100">
+            <tr>
+              <th class="px-4 py-2.5 font-bold text-gray-900 text-[10px] uppercase tracking-wider">Name</th>
+              <th class="px-4 py-2.5 font-bold text-gray-900 text-[10px] uppercase tracking-wider">Type</th>
+              <th class="px-4 py-2.5 font-bold text-gray-900 text-[10px] uppercase tracking-wider">Color</th>
+              <th class="px-4 py-2.5 font-bold text-gray-900 text-[10px] uppercase tracking-wider text-right">Price/m</th>
+              <th class="px-4 py-2.5 font-bold text-gray-900 text-[10px] uppercase tracking-wider">Stock</th>
+              <th class="px-4 py-2.5 font-bold text-gray-900 text-[10px] uppercase tracking-wider">Status</th>
+              <th class="px-4 py-2.5"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-50" id="fabricTableBody">
+            {fabrics.map((f) => (
+              <tr class="hover:bg-indigo-50/30 transition-colors" data-id={f.id}>
+                <td class="px-4 py-2 text-xs font-bold text-gray-900">{f.name}</td>
+                <td class="px-4 py-2 text-[11px] text-gray-600 uppercase tracking-tighter font-medium">{f.type}</td>
+                <td class="px-4 py-2 text-[11px] text-gray-500">{f.color || '-'}</td>
+                <td class="px-4 py-2 text-xs font-bold text-gray-900 text-right">{formatCurrency(f.pricePerMeter)}</td>
+                <td class="px-4 py-2 text-[11px]">
+                  <span class={`font-bold px-1.5 py-0.5 rounded ${f.stockQuantity <= f.lowStockAlert ? 'bg-red-50 text-red-600 border border-red-100' : 'text-gray-700'}`}>
+                    {f.stockQuantity}m
+                  </span>
+                  {f.stockQuantity <= f.lowStockAlert && <span class="ml-1 text-[9px] font-bold text-red-400 uppercase tracking-tighter">Low</span>}
+                </td>
+                <td class="px-4 py-2">
+                  <span class={`inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${f.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    {f.isActive ? 'Active' : 'Inactive'}
+                  </span>
+                </td>
+                <td class="px-4 py-2 text-right">
+                  <div class="flex items-center justify-end gap-1.5">
+                    <button
+                      class="edit-fabric p-1 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                      data-fabric={JSON.stringify(f)}
+                      title="Edit"
+                    >
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-5M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                    </button>
+                    <button
+                      class="delete-fabric p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                      data-id={f.id}
+                      data-name={f.name}
+                      title="Delete"
+                    >
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {fabrics.length === 0 && (
+        <div class="text-center py-8 text-gray-400 text-xs font-medium">No fabrics in inventory</div>
+      )}
+    </div>
+  </div>
+
+  <!-- Fabric Modal -->
+  <div id="fabricModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/50" id="fabricModalOverlay"></div>
+    <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+        <h2 id="fabricModalTitle" class="text-base font-semibold text-gray-900">Add Fabric</h2>
+        <button id="closeFabricModal" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+      </div>
+      <form id="fabricForm" class="px-4 py-4 space-y-3">
+        <input type="hidden" id="fabricId" value="" />
+        <div class="grid grid-cols-2 gap-4">
+          <div class="col-span-2">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Name <span class="text-red-500">*</span></label>
+            <input id="fabricName" type="text" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="e.g. Cotton Poplin" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Type <span class="text-red-500">*</span></label>
+            <input id="fabricType" type="text" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="e.g. Cotton, Silk, Linen" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Color</label>
+            <input id="fabricColor" type="text" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="e.g. White, Navy" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Price per Meter (₹) <span class="text-red-500">*</span></label>
+            <input id="fabricPrice" type="number" min="0.01" step="0.01" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="0.00" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Stock Quantity (m)</label>
+            <input id="fabricStock" type="number" min="0" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="0" value="0" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Low Stock Alert (m)</label>
+            <input id="fabricLowStock" type="number" min="0" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="5" value="5" />
+          </div>
+          <div class="col-span-2">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <textarea id="fabricDesc" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Optional notes about this fabric"></textarea>
+          </div>
+          <div class="col-span-2 flex items-center gap-2">
+            <input id="fabricActive" type="checkbox" checked class="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+            <label for="fabricActive" class="text-sm text-gray-700">Active (visible for orders)</label>
+          </div>
+        </div>
+        <div id="fabricError" class="hidden text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2"></div>
+        <div class="flex gap-3 pt-2">
+          <button type="submit" id="fabricSubmitBtn" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">
+            Save Fabric
+          </button>
+          <button type="button" id="cancelFabricModal" class="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</DashboardLayout>
+
+<script>
+  const modal = document.getElementById('fabricModal')!;
+  const form = document.getElementById('fabricForm') as HTMLFormElement;
+  const titleEl = document.getElementById('fabricModalTitle')!;
+  const errorEl = document.getElementById('fabricError')!;
+  const submitBtn = document.getElementById('fabricSubmitBtn')!;
+
+  function openModal(fabric?: any) {
+    errorEl.classList.add('hidden');
+    if (fabric) {
+      titleEl.textContent = 'Edit Fabric';
+      (document.getElementById('fabricId') as HTMLInputElement).value = fabric.id;
+      (document.getElementById('fabricName') as HTMLInputElement).value = fabric.name;
+      (document.getElementById('fabricType') as HTMLInputElement).value = fabric.type;
+      (document.getElementById('fabricColor') as HTMLInputElement).value = fabric.color || '';
+      (document.getElementById('fabricPrice') as HTMLInputElement).value = fabric.pricePerMeter;
+      (document.getElementById('fabricStock') as HTMLInputElement).value = fabric.stockQuantity;
+      (document.getElementById('fabricLowStock') as HTMLInputElement).value = fabric.lowStockAlert;
+      (document.getElementById('fabricDesc') as HTMLTextAreaElement).value = fabric.description || '';
+      (document.getElementById('fabricActive') as HTMLInputElement).checked = fabric.isActive;
+    } else {
+      titleEl.textContent = 'Add Fabric';
+      form.reset();
+      (document.getElementById('fabricId') as HTMLInputElement).value = '';
+      (document.getElementById('fabricStock') as HTMLInputElement).value = '0';
+      (document.getElementById('fabricLowStock') as HTMLInputElement).value = '5';
+      (document.getElementById('fabricActive') as HTMLInputElement).checked = true;
+    }
+    modal.classList.remove('hidden');
+  }
+
+  function closeModal() {
+    modal.classList.add('hidden');
+  }
+
+  document.getElementById('openAddFabric')!.addEventListener('click', () => openModal());
+  document.getElementById('closeFabricModal')!.addEventListener('click', closeModal);
+  document.getElementById('cancelFabricModal')!.addEventListener('click', closeModal);
+  document.getElementById('fabricModalOverlay')!.addEventListener('click', closeModal);
+
+  document.querySelectorAll('.edit-fabric').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const fabric = JSON.parse((btn as HTMLElement).dataset.fabric!);
+      openModal(fabric);
+    });
+  });
+
+  document.querySelectorAll('.delete-fabric').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = (btn as HTMLElement).dataset.id!;
+      const name = (btn as HTMLElement).dataset.name!;
+      if (!confirm(`Delete fabric "${name}"? This cannot be undone.`)) return;
+      const res = await fetch(`/api/fabrics/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        window.location.reload();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Failed to delete fabric');
+      }
+    });
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorEl.classList.add('hidden');
+    submitBtn.textContent = 'Saving...';
+    submitBtn.setAttribute('disabled', 'true');
+
+    const id = (document.getElementById('fabricId') as HTMLInputElement).value;
+    const body = {
+      name: (document.getElementById('fabricName') as HTMLInputElement).value.trim(),
+      type: (document.getElementById('fabricType') as HTMLInputElement).value.trim(),
+      color: (document.getElementById('fabricColor') as HTMLInputElement).value.trim() || undefined,
+      pricePerMeter: parseFloat((document.getElementById('fabricPrice') as HTMLInputElement).value),
+      stockQuantity: parseInt((document.getElementById('fabricStock') as HTMLInputElement).value || '0'),
+      lowStockAlert: parseInt((document.getElementById('fabricLowStock') as HTMLInputElement).value || '5'),
+      description: (document.getElementById('fabricDesc') as HTMLTextAreaElement).value.trim() || undefined,
+      isActive: (document.getElementById('fabricActive') as HTMLInputElement).checked,
+    };
+
+    const url = id ? `/api/fabrics/${id}` : '/api/fabrics';
+    const method = id ? 'PUT' : 'POST';
+
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      window.location.reload();
+    } else {
+      errorEl.textContent = data.error || 'Something went wrong';
+      errorEl.classList.remove('hidden');
+      submitBtn.textContent = 'Save Fabric';
+      submitBtn.removeAttribute('disabled');
+    }
+  });
+</script>

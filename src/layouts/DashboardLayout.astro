@@ -1,0 +1,52 @@
+---
+import Layout from './Layout.astro';
+import DashboardShellClient from '../components/layout/DashboardShellClient';
+import { Breadcrumb } from '../components/layout/Breadcrumb';
+
+interface Props {
+  title?: string;
+  pageTitle?: string;
+  breadcrumbItems?: { label: string; href?: string }[];
+}
+
+const { title, pageTitle = 'Dashboard', breadcrumbItems = [{ label: pageTitle }] } = Astro.props;
+const user = Astro.locals.user;
+
+if (!user) {
+  return Astro.redirect('/login');
+}
+---
+
+<Layout title={title || `${pageTitle} - StitchIt`}>
+  <div class="bg-gray-50 min-h-screen">
+
+    <!--
+      The shell (sidebar + header) must NEVER occupy document flow space,
+      otherwise the pre-hydration island wrapper creates a big gap.
+      We force it to position:fixed from the very first paint using an
+      inline style on the wrapper — no JS required.
+    -->
+    <div style="position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:30;">
+      <DashboardShellClient
+        client:load
+        user={user as any}
+        currentPath={Astro.url.pathname}
+        pageTitle={pageTitle}
+      />
+    </div>
+
+    <!--
+      Main content column:
+      - lg:ml-64  → clears the 256px fixed sidebar on desktop
+      - pt-16     → clears the 64px fixed header
+      - pointer-events-auto → re-enable clicks (parent has pointer-events:none)
+    -->
+    <div class="lg:ml-64 pt-14 pointer-events-auto min-h-screen bg-slate-50/60 lg:border-l lg:border-slate-200/50">
+      <main class="p-5 lg:p-10 max-w-5xl">
+        <Breadcrumb items={breadcrumbItems} client:load />
+        <slot />
+      </main>
+    </div>
+
+  </div>
+</Layout>
