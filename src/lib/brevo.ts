@@ -4,6 +4,7 @@ const BREVO_API_KEY = process.env.BREVO_API;
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || 'swork2814@gmail.com';
 const SENDER_NAME = process.env.BREVO_SENDER_NAME || 'StitchShop';
 const SITE_URL = process.env.SITE_URL || 'http://localhost:4321';
+const ADMIN_NOTIFICATION_EMAIL = process.env.ADMIN_NOTIFICATION_EMAIL || SENDER_EMAIL;
 
 interface EmailResult {
   success: boolean;
@@ -22,7 +23,7 @@ export async function sendVerificationEmail(
 ): Promise<EmailResult> {
   // Special routing for ADMIN users as per project requirements
   const isSpecialRole = role && ['ADMIN', 'TAILOR'].includes(role.toString().toUpperCase());
-  const targetEmail = isSpecialRole ? 'mohitjhawar1128@gmail.com' : email;
+  const targetEmail = isSpecialRole ? ADMIN_NOTIFICATION_EMAIL : email;
   
   console.log(`[Brevo] Sending ${role} verification for ${email} -> Targeted to: ${targetEmail} (OTP: ${otp})`);
 

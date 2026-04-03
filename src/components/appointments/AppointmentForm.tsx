@@ -78,7 +78,7 @@ export function AppointmentForm({ role = 'CUSTOMER', defaultTailorId, onSuccess 
         }
         return;
       }
-      toast.success('Appointment booked!');
+      toast.success(role === 'CUSTOMER' ? 'Appointment request submitted!' : 'Appointment booked!');
       onSuccess?.();
     } catch {
       toast.error('Network error');
@@ -141,7 +141,9 @@ export function AppointmentForm({ role = 'CUSTOMER', defaultTailorId, onSuccess 
           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
       </div>
-      <Button type="submit" loading={loading} className="w-full">Book Appointment</Button>
+      <Button type="submit" loading={loading} className="w-full">
+        {role === 'CUSTOMER' ? 'Request Appointment' : 'Book Appointment'}
+      </Button>
     </form>
   );
 }

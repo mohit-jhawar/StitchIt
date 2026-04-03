@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import db from '../../../lib/db';
 import { jsonResponse, errorResponse } from '../../../lib/utils';
+import { logAction } from '../../../lib/audit';
 
 const measurementSchema = z.object({
   name: z.string().min(1),
@@ -95,6 +96,11 @@ export const POST: APIRoute = async ({ locals, request }) => {
         savedByRole,
       },
     });
+
+    await logAction(locals.user.id, 'MEASUREMENT_CREATE', 'MEASUREMENT', measurement.id, {
+      name: measurement.name,
+      customerId,
+    }, request);
 
     return jsonResponse(measurement, 201);
   } catch (err) {

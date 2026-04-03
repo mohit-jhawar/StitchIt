@@ -9,8 +9,6 @@ export function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [unverified, setUnverified] = useState(false);
-  const [isResending, setIsResending] = useState(false);
 
   function validate() {
     const e: Record<string, string> = {};
@@ -36,13 +34,18 @@ export function LoginForm() {
 
       const data = await res.json();
 
-      if (!res.ok) {
-        if (res.status === 403) setUnverified(true);
-        toast.error(data.error || 'Login failed');
+      if (data.requiresVerification) {
+        toast.info('A verification code has been sent to your email.');
+        setTimeout(() => {
+          window.location.href = `/verify-otp?email=${encodeURIComponent(data.email)}&from=login`;
+        }, 800);
         return;
       }
 
-      setUnverified(false);
+      if (!res.ok) {
+        toast.error(data.error || 'Login failed');
+        return;
+      }
 
       toast.success(`Welcome back, ${data.user.name || data.user.email}!`);
 
@@ -54,28 +57,6 @@ export function LoginForm() {
       toast.error('Network error. Please try again.');
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function handleResendVerification() {
-    setIsResending(true);
-    try {
-      const res = await fetch('/api/auth/resend-verification', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: form.email }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success('Verification link resent! Please check your inbox.');
-        setUnverified(false);
-      } else {
-        toast.error(data.error || 'Failed to resend link');
-      }
-    } catch {
-      toast.error('Network error');
-    } finally {
-      setIsResending(false);
     }
   }
 
@@ -130,22 +111,6 @@ export function LoginForm() {
         Sign in
       </Button>
 
-      {unverified && (
-        <div className="mt-4 p-4 bg-indigo-50 rounded-xl border border-indigo-100 animate-in fade-in slide-in-from-top-2">
-          <p className="text-xs text-indigo-700 mb-2 font-medium">Email not verified yet?</p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="w-full text-xs"
-            loading={isResending}
-            onClick={handleResendVerification}
-          >
-            Resend verification link
-          </Button>
-        </div>
-      )}
-
       <div className="text-center">
         <p className="text-sm text-gray-500">
           Don't have an account?{' '}
@@ -155,25 +120,6 @@ export function LoginForm() {
         </p>
       </div>
 
-      <div className="border-t border-gray-100 pt-4">
-        <p className="text-xs text-gray-400 text-center mb-2">Demo accounts:</p>
-        <div className="grid grid-cols-3 gap-2 text-xs">
-          {[
-            { label: 'Admin', email: 'admin@stitchit.com', pass: 'admin123' },
-            { label: 'Tailor', email: 'tailor@stitchit.com', pass: 'tailor123' },
-            { label: 'Customer', email: 'customer@stitchit.com', pass: 'customer123' },
-          ].map((demo) => (
-            <button
-              key={demo.label}
-              type="button"
-              onClick={() => setForm({ email: demo.email, password: demo.pass })}
-              className="px-2 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-600 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-700 transition-colors"
-            >
-              {demo.label}
-            </button>
-          ))}
-        </div>
-      </div>
     </form>
   );
 }

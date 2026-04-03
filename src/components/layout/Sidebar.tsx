@@ -3,7 +3,7 @@ import { cn } from '../../lib/utils';
 import {
   FiHome, FiShoppingBag, FiUsers, FiScissors, FiBarChart2,
   FiSettings, FiTag, FiCalendar, FiDollarSign, FiPackage,
-  FiTool, FiUser, FiX, FiChevronRight, FiSliders, FiTrendingUp, FiGrid
+  FiTool, FiUser, FiX, FiChevronRight, FiSliders, FiTrendingUp, FiGrid, FiActivity
 } from 'react-icons/fi';
 
 interface NavItem {
@@ -32,6 +32,7 @@ const adminNav: NavItem[] = [
   { href: '/dashboard/admin/expenses', label: 'Expenses', icon: <FiDollarSign /> },
   { href: '/dashboard/admin/coupons', label: 'Coupons', icon: <FiTag /> },
   { href: '/dashboard/admin/designs', label: 'Design Catalog', icon: <FiGrid /> },
+  { href: '/dashboard/admin/activity', label: 'Activity Log', icon: <FiActivity /> },
 ];
 
 const customerNav: NavItem[] = [

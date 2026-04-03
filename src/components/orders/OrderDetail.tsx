@@ -73,6 +73,8 @@ export function OrderDetail({ orderId, role }: OrderDetailProps) {
   const [payType, setPayType] = useState('ADVANCE');
   const [payNotes, setPayNotes] = useState('');
   const [recordingPay, setRecordingPay] = useState(false);
+  const [customerPoints, setCustomerPoints] = useState<number | null>(null);
+  const [pointsToRedeem, setPointsToRedeem] = useState(0);
 
   // Customer: review
   const [reviewRating, setReviewRating] = useState(5);
@@ -99,6 +101,15 @@ export function OrderDetail({ orderId, role }: OrderDetailProps) {
       setOrder(data);
       setNewStatus(data.status);
       setSelectedTailor(data.tailorId || '');
+      // Fetch customer's loyalty points (admin view)
+      if (role === 'ADMIN' && data.customer?.id) {
+        const uRes = await fetch(`/api/users?role=CUSTOMER&limit=200`);
+        if (uRes.ok) {
+          const uData = await uRes.json();
+          const match = (uData.users || []).find((u: any) => u.customerProfile?.id === data.customerId);
+          if (match?.customerProfile) setCustomerPoints(match.customerProfile.loyaltyPoints ?? 0);
+        }
+      }
     } catch {
       toast.error('Failed to load order');
     } finally {
@@ -164,6 +175,7 @@ export function OrderDetail({ orderId, role }: OrderDetailProps) {
 
   async function handleRecordPayment() {
     if (!payAmount || parseFloat(payAmount) <= 0) { toast.error('Enter a valid amount'); return; }
+    if (pointsToRedeem > 0 && pointsToRedeem % 100 !== 0) { toast.error('Points must be in multiples of 100'); return; }
     setRecordingPay(true);
     try {
       const res = await fetch('/api/payments', {
@@ -175,12 +187,16 @@ export function OrderDetail({ orderId, role }: OrderDetailProps) {
           method: payMethod,
           type: payType,
           notes: payNotes || undefined,
+          pointsToRedeem: pointsToRedeem || 0,
         }),
       });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error || 'Payment failed'); return; }
-      toast.success('Payment recorded');
-      setPayAmount(''); setPayNotes('');
+      const msg = pointsToRedeem > 0
+        ? `Payment recorded + ${pointsToRedeem} points redeemed (₹${pointsToRedeem / 10} discount)`
+        : 'Payment recorded';
+      toast.success(msg);
+      setPayAmount(''); setPayNotes(''); setPointsToRedeem(0);
       await fetchOrder();
     } catch {
       toast.error('Network error');
@@ -431,6 +447,21 @@ export function OrderDetail({ orderId, role }: OrderDetailProps) {
           <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
             <FiDollarSign className="w-4 h-4 text-green-500" /> Record Payment
           </h3>
+
+          {/* Loyalty points available */}
+          {customerPoints !== null && (
+            <div className="mb-3 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">⭐</span>
+                <div>
+                  <p className="text-xs font-semibold text-amber-800">Customer Loyalty Points</p>
+                  <p className="text-[11px] text-amber-600">100 points = ₹10 discount</p>
+                </div>
+              </div>
+              <span className="text-lg font-bold text-amber-700">{customerPoints} pts</span>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 sm:col-span-1">
               <label className="text-xs text-gray-500 uppercase tracking-wide block mb-1">Amount (₹)</label>
@@ -472,6 +503,60 @@ export function OrderDetail({ orderId, role }: OrderDetailProps) {
               />
             </div>
           </div>
+
+          {/* Loyalty redemption */}
+          {customerPoints !== null && customerPoints >= 100 && (
+            <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <label className="text-xs font-semibold text-amber-800 uppercase tracking-wide block mb-2">
+                ⭐ Redeem Loyalty Points (multiples of 100)
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min="0"
+                  max={customerPoints}
+                  step="100"
+                  value={pointsToRedeem}
+                  onChange={(e) => setPointsToRedeem(Math.min(customerPoints, Math.max(0, parseInt(e.target.value) || 0)))}
+                  className="w-32 px-3 py-1.5 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                />
+                <div className="text-sm text-amber-700">
+                  {pointsToRedeem > 0 ? (
+                    <span className="font-semibold">= ₹{pointsToRedeem / 10} discount</span>
+                  ) : (
+                    <span className="text-amber-500">Enter points to redeem</span>
+                  )}
+                </div>
+                {pointsToRedeem > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setPointsToRedeem(0)}
+                    className="text-xs text-amber-600 hover:text-amber-800 underline"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              {pointsToRedeem > 0 && (
+                <p className="text-[11px] text-amber-600 mt-1.5">
+                  Customer will have {customerPoints - pointsToRedeem} points remaining after redemption.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Total summary */}
+          {payAmount && (parseFloat(payAmount) > 0 || pointsToRedeem > 0) && (
+            <div className="mt-3 p-2 bg-gray-50 rounded-lg border border-gray-200 text-xs text-gray-600 space-y-1">
+              {parseFloat(payAmount) > 0 && <div className="flex justify-between"><span>Cash payment</span><span className="font-semibold">₹{parseFloat(payAmount).toFixed(2)}</span></div>}
+              {pointsToRedeem > 0 && <div className="flex justify-between text-amber-700"><span>Loyalty discount ({pointsToRedeem} pts)</span><span className="font-semibold">− ₹{(pointsToRedeem / 10).toFixed(2)}</span></div>}
+              <div className="flex justify-between font-bold text-gray-900 border-t border-gray-200 pt-1 mt-1">
+                <span>Total credited to order</span>
+                <span>₹{((parseFloat(payAmount) || 0) + (pointsToRedeem / 10)).toFixed(2)}</span>
+              </div>
+            </div>
+          )}
+
           <div className="mt-3">
             <Button onClick={handleRecordPayment} loading={recordingPay} disabled={!payAmount || parseFloat(payAmount) <= 0}>
               <FiDollarSign className="w-4 h-4 mr-1" /> Record Payment
@@ -515,14 +600,22 @@ export function OrderDetail({ orderId, role }: OrderDetailProps) {
           <h3 className="text-sm font-semibold text-gray-900 mb-3">Payment History</h3>
           <div className="space-y-2">
             {order.payments.map((p) => (
-              <div key={p.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+              <div key={p.id} className={`flex items-center justify-between py-2 border-b border-gray-100 last:border-0 ${p.type === 'LOYALTY' ? 'bg-amber-50 -mx-1 px-1 rounded-lg' : ''}`}>
                 <div>
-                  <span className="text-sm font-medium text-gray-900">{p.type}</span>
-                  <span className="text-xs text-gray-400 ml-2 uppercase">{p.method}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-900">
+                      {p.type === 'LOYALTY' ? '⭐ Loyalty Discount' : p.type}
+                    </span>
+                    {p.type !== 'LOYALTY' && (
+                      <span className="text-xs text-gray-400 uppercase">{p.method}</span>
+                    )}
+                  </div>
                   {p.notes && <p className="text-xs text-gray-400 mt-0.5">{p.notes}</p>}
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-bold text-green-600">{formatCurrency(p.amount)}</p>
+                  <p className={`text-sm font-bold ${p.type === 'LOYALTY' ? 'text-amber-600' : 'text-green-600'}`}>
+                    {p.type === 'LOYALTY' ? '−' : ''}{formatCurrency(p.amount)}
+                  </p>
                   <p className="text-xs text-gray-400">{formatDate(p.paidAt)}</p>
                 </div>
               </div>

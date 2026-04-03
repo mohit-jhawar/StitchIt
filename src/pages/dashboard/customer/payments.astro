@@ -198,6 +198,23 @@ const allPayments      = orders
       )}
     </div>
 
+    <!-- Loyalty info banner -->
+    <div class="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between">
+      <div>
+        <p class="text-sm font-semibold text-amber-900">⭐ How Loyalty Points Work</p>
+        <ul class="text-xs text-amber-700 mt-1 space-y-0.5">
+          <li>• Earn <strong>1 point</strong> for every <strong>₹100</strong> you pay</li>
+          <li>• Redeem <strong>100 points</strong> for a <strong>₹10 discount</strong> on any order</li>
+          <li>• Ask the shop to apply your points when making a payment</li>
+        </ul>
+      </div>
+      <div class="text-center ml-4 flex-shrink-0">
+        <p class="text-3xl font-bold text-amber-600">{profile.loyaltyPoints}</p>
+        <p class="text-xs text-amber-500 font-medium">points</p>
+        <p class="text-[10px] text-amber-400">≈ ₹{Math.floor(profile.loyaltyPoints / 100) * 10} value</p>
+      </div>
+    </div>
+
     <!-- Payment history -->
     {allPayments.length > 0 && (
       <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -206,18 +223,22 @@ const allPayments      = orders
         </div>
         <div class="divide-y divide-gray-100">
           {allPayments.map((p) => (
-            <div class="px-4 py-2.5 flex items-center justify-between hover:bg-gray-50">
+            <div class={`px-4 py-2.5 flex items-center justify-between hover:bg-gray-50 ${p.type === 'LOYALTY' ? 'bg-amber-50/50' : ''}`}>
               <div class="flex items-center gap-3">
-                <div class="w-8 h-8 bg-green-50 rounded-full flex items-center justify-center text-green-700 font-bold text-xs flex-shrink-0">
-                  ₹
+                <div class={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${p.type === 'LOYALTY' ? 'bg-amber-100 text-amber-700' : 'bg-green-50 text-green-700'}`}>
+                  {p.type === 'LOYALTY' ? '⭐' : '₹'}
                 </div>
                 <div>
-                  <p class="text-xs font-semibold text-gray-900 truncate max-w-[150px]">{p.serviceSummary}</p>
+                  <p class="text-xs font-semibold text-gray-900 truncate max-w-[150px]">
+                    {p.type === 'LOYALTY' ? 'Loyalty Discount' : p.serviceSummary}
+                  </p>
                   <p class="text-[10px] text-gray-400 font-mono">{p.orderNumber} · {p.type}</p>
                 </div>
               </div>
               <div class="text-right">
-                <p class="text-xs font-bold text-green-600">{formatCurrency(p.amount)}</p>
+                <p class={`text-xs font-bold ${p.type === 'LOYALTY' ? 'text-amber-600' : 'text-green-600'}`}>
+                  {p.type === 'LOYALTY' ? '−' : ''}{formatCurrency(p.amount)}
+                </p>
                 <p class="text-[10px] text-gray-400">{formatDate(p.paidAt)}</p>
               </div>
             </div>

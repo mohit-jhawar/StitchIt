@@ -42,10 +42,12 @@ enum AppointmentType {
 }
 
 enum AppointmentStatus {
+  PENDING
   SCHEDULED
   COMPLETED
   CANCELLED
   NO_SHOW
+  REJECTED
 }
 
 enum PaymentMethod {
@@ -53,11 +55,13 @@ enum PaymentMethod {
   CARD
   UPI
   ONLINE
+  POINTS
 }
 
 enum PaymentType {
   ADVANCE
   BALANCE
+  LOYALTY
 }
 
 enum ComplaintPriority {
@@ -184,6 +188,8 @@ model Order {
   designId        String?
   design          Design?         @relation(fields: [designId], references: [id])
   deliveryDate    DateTime?
+  couponCode      String?         // coupon code applied at order creation
+  couponDiscount  Float?          // discount amount granted by the coupon
   savedById       String?         // User ID of whoever created this order
   savedByName     String?         // Display name of creator
   savedByRole     String?         // Role of creator
@@ -278,26 +284,28 @@ model Appointment {
   tailorId     String?
   tailor       TailorProfile?    @relation(fields: [tailorId], references: [id])
   type         AppointmentType
-  status       AppointmentStatus @default(SCHEDULED)
+  status       AppointmentStatus @default(PENDING)
   scheduledAt  DateTime
   notes        String?
-  bookedById   String?         // User ID of whoever booked this appointment
-  bookedByName String?         // Display name of booker
-  bookedByRole String?         // Role of booker (CUSTOMER, TAILOR, ADMIN)
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  bookedById    String?         // User ID of whoever booked this appointment
+  bookedByName  String?         // Display name of booker
+  bookedByRole  String?         // Role of booker (CUSTOMER, TAILOR, ADMIN)
+  isOpenRequest Boolean         @default(false) // true when customer requested without specifying a tailor
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 }
 
 model Payment {
-  id            String        @id @default(cuid())
-  orderId       String
-  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  amount        Float
-  method        PaymentMethod @default(CASH)
-  type          PaymentType   @default(ADVANCE)
-  notes         String?
-  paidAt        DateTime      @default(now())
-  createdAt     DateTime      @default(now())
+  id             String        @id @default(cuid())
+  orderId        String
+  order          Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount         Float
+  method         PaymentMethod @default(CASH)
+  type           PaymentType   @default(ADVANCE)
+  notes          String?
+  pointsRedeemed Int           @default(0)  // loyalty points used (only for LOYALTY type)
+  paidAt         DateTime      @default(now())
+  createdAt      DateTime      @default(now())
 }
 
 model Expense {

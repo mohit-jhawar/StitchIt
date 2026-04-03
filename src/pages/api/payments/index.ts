@@ -11,6 +11,7 @@ const paymentSchema = z.object({
   method: z.enum(['CASH', 'CARD', 'UPI', 'ONLINE']).default('CASH'),
   type: z.enum(['ADVANCE', 'BALANCE']).default('ADVANCE'),
   notes: z.string().optional(),
+  pointsToRedeem: z.number().int().min(0).optional().default(0),
 });
 
 export const GET: APIRoute = async ({ locals, url }) => {
@@ -48,25 +49,86 @@ export const POST: APIRoute = async ({ locals, request }) => {
     const parsed = paymentSchema.safeParse(body);
     if (!parsed.success) return errorResponse(parsed.error.issues[0]?.message || 'Validation failed', 400);
 
+    const { orderId, amount, method, type, notes, pointsToRedeem } = parsed.data;
+
     const order = await db.order.findUnique({
-      where: { id: parsed.data.orderId },
-      include: { customer: true, tailor: true },
+      where: { id: orderId },
+      include: { customer: { include: { user: { select: { id: true } } } }, tailor: true },
     });
 
     if (!order) return errorResponse('Order not found', 404);
 
-    const payment = await db.payment.create({ data: parsed.data });
+    // --- Validate payment doesn't exceed remaining balance ---
+    const paidAggregate = await db.payment.aggregate({
+      where: { orderId },
+      _sum: { amount: true },
+    });
+    const alreadyPaid = paidAggregate._sum.amount ?? 0;
+    const remaining = Math.max(0, order.totalAmount - alreadyPaid);
 
-    // Update tailor earnings if order is assigned to a tailor
-    if (order.tailorId && order.tailor) {
-      await db.tailorProfile.update({
-        where: { id: order.tailorId },
-        data: { totalEarnings: { increment: parsed.data.amount } },
+    // Calculate what this entire request will charge (cash + any loyalty discount)
+    const POINTS_PER_RUPEE_CHECK = 100;
+    const RUPEES_PER_100_POINTS_CHECK = 10;
+    const loyaltyDiscount = pointsToRedeem > 0
+      ? (pointsToRedeem / POINTS_PER_RUPEE_CHECK) * RUPEES_PER_100_POINTS_CHECK
+      : 0;
+    const totalThisRequest = amount + loyaltyDiscount;
+
+    if (totalThisRequest > remaining + 0.01) {
+      return errorResponse(
+        `Payment of ₹${totalThisRequest.toFixed(2)} exceeds remaining balance of ₹${remaining.toFixed(2)}`,
+        400
+      );
+    }
+
+    // --- Loyalty redemption validation ---
+    const POINTS_PER_RUPEE = 100; // 100 points = ₹10 → 10 points = ₹1
+    const RUPEES_PER_100_POINTS = 10;
+
+    let loyaltyPayment = null;
+    if (pointsToRedeem && pointsToRedeem > 0) {
+      if (pointsToRedeem % 100 !== 0) return errorResponse('Points must be redeemed in multiples of 100', 400);
+      const customer = await db.customerProfile.findUnique({ where: { id: order.customerId } });
+      if (!customer) return errorResponse('Customer profile not found', 404);
+      if (customer.loyaltyPoints < pointsToRedeem) {
+        return errorResponse(`Customer only has ${customer.loyaltyPoints} loyalty points available`, 400);
+      }
+      const discountAmount = (pointsToRedeem / POINTS_PER_RUPEE) * RUPEES_PER_100_POINTS;
+
+      // Create the loyalty discount payment entry
+      loyaltyPayment = await db.payment.create({
+        data: {
+          orderId,
+          amount: discountAmount,
+          method: 'POINTS',
+          type: 'LOYALTY',
+          notes: `${pointsToRedeem} loyalty points redeemed (₹${discountAmount} discount)`,
+          pointsRedeemed: pointsToRedeem,
+        },
+      });
+
+      // Deduct points from customer
+      await db.customerProfile.update({
+        where: { id: order.customerId },
+        data: { loyaltyPoints: { decrement: pointsToRedeem } },
       });
     }
 
-    // Award loyalty points to customer (1 point per ₹100 paid)
-    const pointsEarned = Math.floor(parsed.data.amount / 100);
+    // Record the cash payment
+    const payment = await db.payment.create({
+      data: { orderId, amount, method, type, notes },
+    });
+
+    // Update tailor earnings
+    if (order.tailorId && order.tailor) {
+      await db.tailorProfile.update({
+        where: { id: order.tailorId },
+        data: { totalEarnings: { increment: amount } },
+      });
+    }
+
+    // Award loyalty points (1 point per ₹100 cash paid — not on loyalty discount itself)
+    const pointsEarned = Math.floor(amount / 100);
     if (pointsEarned > 0) {
       await db.customerProfile.update({
         where: { id: order.customerId },
@@ -76,14 +138,19 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
     await logAction(locals.user.id, 'PAYMENT_RECEIVE', 'PAYMENT', payment.id, parsed.data, request);
 
+    const discountNote = loyaltyPayment
+      ? ` ${pointsToRedeem} loyalty points were redeemed for a ₹${(pointsToRedeem! / POINTS_PER_RUPEE) * RUPEES_PER_100_POINTS} discount.`
+      : '';
+    const earnNote = pointsEarned > 0 ? ` You earned ${pointsEarned} loyalty points!` : '';
+
     await sendSystemNotification(
-      order.customer.userId,
+      order.customer.user.id,
       'Payment Received',
-      `A payment of ${formatCurrency(parsed.data.amount)} has been recorded for your order #${order.orderNumber}.${pointsEarned > 0 ? ` You earned ${pointsEarned} loyalty points!` : ''}`,
+      `A payment of ${formatCurrency(amount)} has been recorded for your order #${order.orderNumber}.${discountNote}${earnNote}`,
       'success'
     );
 
-    return jsonResponse(payment, 201);
+    return jsonResponse({ payment, loyaltyPayment }, 201);
   } catch (err) {
     console.error(err);
     return errorResponse('Internal server error', 500);

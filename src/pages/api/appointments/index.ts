@@ -3,6 +3,7 @@ import { z } from 'zod';
 import db from '../../../lib/db';
 import { jsonResponse, errorResponse } from '../../../lib/utils';
 import { sendSystemNotification } from '../../../lib/notifications';
+import { logAction } from '../../../lib/audit';
 
 const appointmentSchema = z.object({
   tailorId: z.string().optional(),
@@ -23,7 +24,13 @@ export const GET: APIRoute = async ({ locals }) => {
     } else if (locals.user.role === 'TAILOR') {
       const profile = await db.tailorProfile.findUnique({ where: { userId: locals.user.id } });
       if (!profile) return errorResponse('Profile not found', 404);
-      where.tailorId = profile.id;
+      // Show appointments assigned to this tailor, unassigned PENDING open requests,
+      // and confirmed open requests (so other tailors know who took it)
+      where.OR = [
+        { tailorId: profile.id },
+        { tailorId: null, status: 'PENDING', isOpenRequest: true },
+        { isOpenRequest: true, status: 'SCHEDULED', tailorId: { not: profile.id } },
+      ];
     }
 
     const appointments = await db.appointment.findMany({
@@ -98,7 +105,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
           where: {
             tailorId,
             scheduledAt: { gte: dayStart, lte: dayEnd },
-            status: { notIn: ['CANCELLED', 'NO_SHOW'] },
+            status: { notIn: ['CANCELLED', 'NO_SHOW', 'REJECTED', 'PENDING'] },
           },
         });
 
@@ -111,6 +118,11 @@ export const POST: APIRoute = async ({ locals, request }) => {
       }
     }
 
+    // Customers submit requests (PENDING); tailors/admins book directly (SCHEDULED)
+    const initialStatus = role === 'CUSTOMER' ? 'PENDING' : 'SCHEDULED';
+    // Open request = customer didn't pick a specific tailor
+    const isOpenRequest = role === 'CUSTOMER' && !tailorId;
+
     const appointment = await db.appointment.create({
       data: {
         customerId,
@@ -121,16 +133,63 @@ export const POST: APIRoute = async ({ locals, request }) => {
         bookedById: userId,
         bookedByName,
         bookedByRole,
+        status: initialStatus,
+        isOpenRequest,
       },
     });
 
-    // Notify customer
-    await sendSystemNotification(
-      customerUserId,
-      'New Appointment Booked',
-      `A ${parsed.data.type.replace(/_/g, ' ')} appointment has been scheduled for you on ${new Date(parsed.data.scheduledAt).toLocaleDateString('en-IN', { dateStyle: 'medium', timeStyle: 'short' } as any)} by ${bookedByName}.`,
-      'info'
-    );
+    const dateLabel = new Date(parsed.data.scheduledAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' } as any);
+    const typeLabel = parsed.data.type.replace(/_/g, ' ');
+
+    if (role === 'CUSTOMER') {
+      // Confirm to customer that request is pending
+      await sendSystemNotification(
+        customerUserId,
+        'Appointment Request Submitted',
+        `Your ${typeLabel} appointment request for ${dateLabel} has been submitted and is awaiting tailor confirmation.`,
+        'info'
+      );
+
+      if (isOpenRequest) {
+        // Notify ALL tailors about this open request
+        const allTailors = await db.tailorProfile.findMany({ select: { userId: true } });
+        await Promise.all(
+          allTailors.map((t) =>
+            sendSystemNotification(
+              t.userId,
+              'New Open Appointment Request',
+              `${bookedByName} has requested a ${typeLabel} appointment on ${dateLabel} and is open to any available tailor.`,
+              'info'
+            )
+          )
+        );
+      } else if (tailorId) {
+        // Notify only the selected tailor
+        const tailorProfile = await db.tailorProfile.findUnique({ where: { id: tailorId }, select: { userId: true } });
+        if (tailorProfile) {
+          await sendSystemNotification(
+            tailorProfile.userId,
+            'New Appointment Request',
+            `${bookedByName} has requested a ${typeLabel} appointment on ${dateLabel}. Please approve or reject it.`,
+            'info'
+          );
+        }
+      }
+    } else {
+      // Tailor / Admin booked directly — notify customer
+      await sendSystemNotification(
+        customerUserId,
+        'Appointment Scheduled',
+        `A ${typeLabel} appointment has been booked for you on ${dateLabel} by ${bookedByName}.`,
+        'info'
+      );
+    }
+
+    await logAction(userId, 'APPOINTMENT_CREATE', 'APPOINTMENT', appointment.id, {
+      type: parsed.data.type,
+      scheduledAt: parsed.data.scheduledAt,
+      isOpenRequest,
+    }, request);
 
     return jsonResponse(appointment, 201);
   } catch {

@@ -31,7 +31,7 @@ export const POST: APIRoute = async ({ request }) => {
     // Check if OTP is expired
     const now = new Date();
     if (user.verificationExpires && user.verificationExpires < now) {
-      return errorResponse('This verification code has expired. Please register again.', 401);
+      return errorResponse('This verification code has expired. Please request a new code.', 401);
     }
 
     // Success: Verify email and clear OTP data

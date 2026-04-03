@@ -5,6 +5,8 @@ import db from '../../../lib/db';
 import { comparePassword, signToken } from '../../../lib/auth';
 import { jsonResponse, errorResponse } from '../../../lib/utils';
 import { logAction } from '../../../lib/audit';
+import { generateOTP } from '../../../lib/tokens';
+import { sendVerificationEmail } from '../../../lib/brevo';
 import {
   checkLoginIpLimit,
   checkEmailLockout,
@@ -76,8 +78,28 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     // Check email verification
     if (!user.emailVerified) {
+      // Auto-generate and send OTP so the customer can verify immediately
+      const otp = generateOTP();
+      const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+      await db.user.update({
+        where: { id: user.id },
+        data: { verificationToken: otp, verificationExpires: expires },
+      });
+
+      let profileName = user.email;
+      if (user.role === 'CUSTOMER') {
+        const profile = await db.customerProfile.findUnique({ where: { userId: user.id } });
+        profileName = profile?.name || user.email;
+      } else if (user.role === 'TAILOR') {
+        const profile = await db.tailorProfile.findUnique({ where: { userId: user.id } });
+        profileName = profile?.name || user.email;
+      }
+
+      await sendVerificationEmail(user.email, profileName, otp, user.role);
       await logAction(user.id, 'LOGIN_BLOCKED', 'USER', user.id, { email, reason: 'email_unverified', ip }, request);
-      return errorResponse('Your email address is not verified. Please check your inbox or spam for the verification link.', 403);
+
+      return jsonResponse({ requiresVerification: true, email: user.email });
     }
 
     // Successful login — clear failure counter

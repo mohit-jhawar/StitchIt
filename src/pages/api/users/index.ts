@@ -6,7 +6,13 @@ import { jsonResponse, errorResponse, paginate } from '../../../lib/utils';
 import { hashPassword } from '../../../lib/auth';
 
 export const GET: APIRoute = async ({ locals, url }) => {
-  if (!locals.user || (locals.user.role !== 'ADMIN' && locals.user.role !== 'TAILOR')) {
+  if (!locals.user) return errorResponse('Unauthorized', 401);
+  // Customers may only fetch the tailor list (for appointment booking)
+  const requestedRole = url.searchParams.get('role') || '';
+  if (locals.user.role === 'CUSTOMER' && requestedRole !== 'TAILOR') {
+    return errorResponse('Forbidden', 403);
+  }
+  if (locals.user.role !== 'ADMIN' && locals.user.role !== 'TAILOR' && locals.user.role !== 'CUSTOMER') {
     return errorResponse('Forbidden', 403);
   }
 
