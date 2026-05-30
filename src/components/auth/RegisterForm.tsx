@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
-import { Select } from '../ui/Select';
-import { FiUser, FiMail, FiLock, FiPhone, FiShield, FiScissors, FiCheckCircle } from 'react-icons/fi';
+import { FiUser, FiMail, FiLock, FiPhone, FiScissors, FiCheckCircle } from 'react-icons/fi';
 
 export function RegisterForm() {
   const [form, setForm] = useState({
@@ -73,11 +72,6 @@ export function RegisterForm() {
       setLoading(false);
     }
   }
-
-  const roleOptions = [
-    { value: 'CUSTOMER', label: 'Customer - Order tailoring services' },
-    { value: 'TAILOR', label: 'Tailor - Provide tailoring services' },
-  ];
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">

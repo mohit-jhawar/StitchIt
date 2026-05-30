@@ -49,7 +49,7 @@ const catColors: Record<string, string> = {
           <span class={`inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-medium capitalize mb-1 ${catColors[cat] || 'bg-gray-100 text-gray-700'}`}>
             {cat}
           </span>
-          <p class="text-base font-bold text-gray-900">{formatCurrency(amt)}</p>
+          <p class="text-base font-bold text-gray-900">{formatCurrency(amt as number)}</p>
         </div>
       ))}
     </div>

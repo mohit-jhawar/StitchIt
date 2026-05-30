@@ -130,7 +130,9 @@ export const POST: APIRoute = async ({ locals, request }) => {
         where: { id: { in: serviceIds }, isActive: true },
         select: { id: true, basePrice: true },
       });
-      const serviceMap = new Map(services.map((s) => [s.id, s]));
+      const serviceMap = new Map<string, { id: string; basePrice: number }>(
+        services.map((s) => [s.id, s])
+      );
 
       // Reject if any service doesn't exist or is inactive
       for (const item of items) {

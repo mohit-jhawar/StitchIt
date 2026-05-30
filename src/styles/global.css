@@ -140,7 +140,7 @@ main .border-b .p-5, main .border-b.px-5.py-4 { font-size: 0.85rem; }
 
 /* Improved touch targets for small screens */
 @media (max-width: 640px) {
-  button, a {
+  .touch-target {
     min-height: 48px;
     display: flex;
     align-items: center;

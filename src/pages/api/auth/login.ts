@@ -124,6 +124,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     // Use Astro's cookie API for reliable cookie setting with @astrojs/node
     cookies.set('auth_token', token, {
       httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
       path: '/',
       maxAge: 7 * 24 * 60 * 60,
       sameSite: 'lax',

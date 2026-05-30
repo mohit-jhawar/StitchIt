@@ -226,7 +226,7 @@ async function main() {
       update: {},
       create: {
         id: 'fab-silk',
-        name: 'Banarasi Silk',
+        name: ' Banarasi Silk',
         type: 'Silk',
         pricePerMeter: 1200,
         stockQuantity: 20,
@@ -484,4 +484,5 @@ main()
   })
   .finally(async () => {
     await db.$disconnect();
+    await pool.end();
   });
