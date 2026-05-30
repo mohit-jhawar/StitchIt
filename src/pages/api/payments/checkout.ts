@@ -84,7 +84,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
         },
       ],
       mode: 'payment',
-      success_url: `${process.env.SITE_URL}/dashboard/customer/payments?success=true&orderNumber=${order.orderNumber}&amount=${amount}`,
+      success_url: `${process.env.SITE_URL}/dashboard/customer/payments?success=true&orderNumber=${order.orderNumber}`,
       cancel_url: `${process.env.SITE_URL}/dashboard/customer/payments?cancelled=true`,
       metadata: {
         orderId: order.id,

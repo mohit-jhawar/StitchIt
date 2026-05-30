@@ -12,8 +12,7 @@ if (!profile) return Astro.redirect('/login');
 const success = Astro.url.searchParams.get('success') === 'true';
 const cancelled = Astro.url.searchParams.get('cancelled') === 'true';
 const paidOrderNumber = Astro.url.searchParams.get('orderNumber');
-const paidAmountStr = Astro.url.searchParams.get('amount');
-const paidAmount = paidAmountStr ? parseFloat(paidAmountStr) : null;
+
 
 const orders = await db.order.findMany({
   where: { customerId: profile.id },
@@ -58,9 +57,9 @@ const allPayments      = orders
           ✓
         </div>
         <div class="flex-1">
-          <h3 class="text-sm font-semibold text-emerald-900">Payment Successful!</h3>
+          <h3 class="text-sm font-semibold text-emerald-900">Payment Received!</h3>
           <p class="text-xs text-emerald-700 mt-0.5 font-sans">
-            Thank you! Your payment of <strong class="font-semibold">{paidAmount ? formatCurrency(paidAmount) : 'the requested amount'}</strong> for Order <strong class="font-mono font-semibold">#{paidOrderNumber || ''}</strong> has been successfully received. Your order status will be updated immediately.
+            Thank you! Your payment for Order <strong class="font-mono font-semibold">#{paidOrderNumber || ''}</strong> has been successfully received. Your order status will be updated momentarily once the transaction clears.
           </p>
         </div>
         <button onclick="window.history.replaceState({}, document.title, window.location.pathname);" class="text-emerald-400 hover:text-emerald-600 transition-colors text-lg font-bold leading-none">&times;</button>
