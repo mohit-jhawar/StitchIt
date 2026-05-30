@@ -2,23 +2,33 @@ import { defineMiddleware } from 'astro:middleware';
 import { verifyToken } from './lib/auth';
 import db from './lib/db';
 
-// CSRF protection: ensure Origin/Referer matches allowed site URL
 function validateCsrf(request: Request): boolean {
   const origin = request.headers.get('origin') || request.headers.get('referer');
   if (!origin) return true; // No origin/referer – allow
 
-  const allowed = process.env.SITE_URL;
-  if (!allowed) {
-    if (process.env.NODE_ENV !== 'production') return true;
-    console.warn('SITE_URL not set in production. CSRF validation may be compromised.');
-    return true;
-  }
-
   try {
     const originUrl = new URL(origin);
-    const allowedUrl = new URL(allowed);
-    return originUrl.hostname === allowedUrl.hostname;
-  } catch {
+    const requestUrl = new URL(request.url);
+    
+    // 1. Check if it matches the current request's host natively
+    if (originUrl.hostname === requestUrl.hostname) return true;
+
+    // 2. Fallback to SITE_URL environment variable if provided
+    const allowed = process.env.SITE_URL;
+    if (allowed) {
+      // Handle cases where user forgot to add https:// in Netlify
+      const allowedWithProto = allowed.startsWith('http') ? allowed : `https://${allowed}`;
+      const allowedUrl = new URL(allowedWithProto);
+      if (originUrl.hostname === allowedUrl.hostname) return true;
+    }
+
+    // 3. Allow localhost for local development
+    if (originUrl.hostname === 'localhost' || originUrl.hostname === '127.0.0.1') return true;
+
+    console.warn(`CSRF failed: origin ${originUrl.hostname} did not match request ${requestUrl.hostname} or SITE_URL`);
+    return false;
+  } catch (err) {
+    console.error('CSRF validation URL parsing error:', err);
     return false;
   }
 }
