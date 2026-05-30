@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "npx prisma generate && astro build",
+    "build": "npx prisma db push --accept-data-loss && npx prisma generate && astro build",
     "preview": "astro preview",
     "astro": "astro",
     "db:push": "prisma db push",
