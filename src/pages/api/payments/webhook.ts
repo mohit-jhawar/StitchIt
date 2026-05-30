@@ -46,12 +46,8 @@ export const POST: APIRoute = async ({ request }) => {
 
     try {
       // 1. Check if this payment session was already processed to avoid duplication (idempotency)
-      const existingPayment = await db.payment.findFirst({
-        where: {
-          notes: {
-            contains: session.id,
-          },
-        },
+      const existingPayment = await db.payment.findUnique({
+        where: { stripeSessionId: session.id },
       });
 
       if (existingPayment) {
@@ -66,7 +62,8 @@ export const POST: APIRoute = async ({ request }) => {
           amount,
           method: 'ONLINE',
           type: type as any,
-          notes: `Stripe Online Payment (Session: ${session.id})`,
+          notes: `Stripe Online Payment`,
+          stripeSessionId: session.id,
         },
       });
 

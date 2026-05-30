@@ -296,16 +296,17 @@ model Appointment {
 }
 
 model Payment {
-  id             String        @id @default(cuid())
-  orderId        String
-  order          Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  amount         Float
-  method         PaymentMethod @default(CASH)
-  type           PaymentType   @default(ADVANCE)
-  notes          String?
-  pointsRedeemed Int           @default(0)  // loyalty points used (only for LOYALTY type)
-  paidAt         DateTime      @default(now())
-  createdAt      DateTime      @default(now())
+  id              String        @id @default(cuid())
+  orderId         String
+  order           Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount          Float
+  method          PaymentMethod @default(CASH)
+  type            PaymentType   @default(ADVANCE)
+  notes           String?
+  stripeSessionId String?       @unique
+  pointsRedeemed  Int           @default(0)  // loyalty points used (only for LOYALTY type)
+  paidAt          DateTime      @default(now())
+  createdAt       DateTime      @default(now())
 }
 
 model Expense {
